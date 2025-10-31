@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            --primary: #357ddb;
+            --accent: #7df9ff;
+            --bg: #f7f5f6;
+            --white: #ffffff;
+        }
+
+        body {
+            background: var(--bg);
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 10px;
+        }
+
+        .element-row {
+            display: grid;
+            grid-template-columns: 70px 1fr 100px 50px;
+            align-items: center;
+            gap: 10px;
+            background: var(--white);
+            margin: 5px;
+            padding: 10px;
+            border-radius: 25px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .pin-id {
+            font-weight: 600;
+            color: var(--primary);
+            text-align: center;
+        }
+
+        .mode-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: var(--primary);
+            color: white;
+            cursor: pointer;
+            transition: 0.3s;
+            justify-self: end;
+        }
+
+        .status-led {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #ddd;
+            transition: 0.3s;
+            justify-self: center;
+        }
+
+        .status-led.active {
+            background: var(--primary);
+            box-shadow: 0 0 10px var(--accent);
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 0 10px;
+        }
+
+        input[type="range"] { 
+            width: 100%; 
+            height: 6px;
+            background: #eee;
+            border-radius: 3px;
+        }
+
+        progress { 
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background: var(--white);
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background: var(--primary);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+         .serial-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: var(--white);
+            border-radius: 15px;
+        }
+        
+        #comPorts {
+            padding: 8px;
+            border: 1px solid var(--primary);
+            border-radius: 8px;
+        }
+        
+        #connectBtn {
+            padding: 8px 20px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="serial-controls">
+        <select id="comPorts"></select>
+        <button id="connectBtn">الاتصال</button>
+    </div>
+    <div id="container"></div>
+    <script>
+        let serialPort;
+        let reader;
+        let writer;
+        
+        // إعدادات السيريال
+        const encoder = new TextEncoder();
+        const decoder = new TextDecoder();
+        
+        // العناصر السابقة (نفس الكود السابق)...
+        
+        // إضافة معالجات الأحداث الجديدة
+        document.getElementById('connectBtn').addEventListener('click', async () => {
+            try {
+                if (!serialPort) {
+                    serialPort = await navigator.serial.requestPort();
+                    await serialPort.open({ baudRate: 115200 });
+                    document.getElementById('connectBtn').textContent = "قطع الاتصال";
+                    setupSerialListeners();
+                } else {
+                    await reader.cancel();
+                    await writer.close();
+                    serialPort = null;
+                    document.getElementById('connectBtn').textContent = "الاتصال";
+                }
+            } catch (error) {
+                console.error('خطأ في الاتصال:', error);
+            }
+        });
+        
+        async function setupSerialListeners() {
+            reader = serialPort.readable.getReader();
+            writer = serialPort.writable.getWriter();
+            
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                handleSerialData(value);
+            }
+        }
+        
+        function handleSerialData(data) {
+            const str = decoder.decode(data);
+            const parts = str.trim().split(' ');
+            
+            // معالجة البيانات الواردة
+            switch(parts[0]) {
+                case '1': // Analog Read
+                    updateAnalogPin(`A${parts[1]}`, parts[2]);
+                    break;
+                case '2': // Digital Read
+                    updateDigitalPin(`D${parts[1]}`, parts[2]);
+                    break;
+                case '7': // PWM Update
+                    updatePwmPin(`D${parts[1]}`, parts[2]);
+                    break;
+            }
+        }
+        
+        function updateAnalogPin(pinId, value) {
+            const element = elements.find(el => el.id === pinId);
+            if (element) {
+                element.value = value;
+                const progress = document.querySelector(`#${pinId} progress`);
+                if (progress) progress.value = value;
+            }
+        }
+        
+        function updateDigitalPin(pinId, value) {
+            const element = elements.find(el => el.id === pinId);
+            if (element) {
+                element.value = value;
+                const led = document.querySelector(`#${pinId} .status-led`);
+                if (led) led.classList.toggle('active', value === '1');
+            }
+        }
+        
+        function updatePwmPin(pinId, value) {
+            const element = elements.find(el => el.id === pinId);
+            if (element) {
+                element.value = value;
+                const slider = document.querySelector(`#${pinId} input[type="range"]`);
+                if (slider) slider.value = value;
+            }
+        }
+        
+        // تعديل معالجات الأحداث لإرسال الأوامر
+        document.addEventListener('input', async (e) => {
+            if (!serialPort) return;
+            
+            const row = e.target.closest('.element-row');
+            const pinId = row.querySelector('.pin-id').textContent;
+            
+            if (e.target.matches('input[type="range"]')) {
+                const cmd = `7 ${pinId.slice(1)} ${e.target.value}\n`;
+                await writer.write(encoder.encode(cmd));
+            }
+            
+            if (e.target.matches('input[type="checkbox"]')) {
+                const state = e.target.checked ? 1 : 0;
+                const cmd = `6 ${pinId.slice(1)} ${state}\n`;
+                await writer.write(encoder.encode(cmd));
+            }
+        });
+        
+        // تحديث العناصر لتعريف ID فريد لكل دبوس
+        function createElement(el) {
+            const div = document.createElement('div');
+            div.className = 'element-row';
+            div.id = el.id;
+        }
+        </script>
+<script>
+    
+const pwmPins = new Set(["D3","D5","D6","D9","D10","D11"]);
+const analogPins = new Set(["A0","A1","A2","A3","A4","A5","A6","A7"]);
+
+const elements = Array.from({length: 21}, (_,i) => {
+    const isAnalog = i >= 14;
+    const id = isAnalog ? `A${i-14}` : `D${i}`;
+    
+    return {
+        id: id,
+        mode: 0,
+        modes: getModesForPin(id),
+        value: 0
+    };
+});
+
+function getModesForPin(id) {
+    if(pwmPins.has(id)) return ["💡","⚡","🔌","🌓"];
+    if(analogPins.has(id)) return ["💡","⚡","📊"];
+    return ["💡","⚡","🔌"];
+}
+
+function createElement(el) {
+    const div = document.createElement('div');
+    div.className = 'element-row';
+    div.innerHTML = `
+        <div class="pin-id">${el.id}</div>
+        <div class="controls">
+            ${el.modes[el.mode] === '🌓' ? '<input type="range" min="0" max="255">' : ''}
+            ${el.modes[el.mode] === '📊' ? '<progress value="0" max="1024"></progress>' : ''}
+            ${el.modes[el.mode] === '🔌' ? '<label class="switch"><input type="checkbox"><div class="slider"></div></label>' : ''}
+        </div>
+        <div class="status-led ${el.value ? 'active' : ''}"></div>
+        <button class="mode-btn">${el.modes[el.mode]}</button>
+    `;
+    return div;
+}
+
+// Render elements
+elements.forEach(el => {
+    document.getElementById('container').appendChild(createElement(el));
+});
+
+// Event handling
+document.addEventListener('click', (e) => {
+    if(e.target.closest('.mode-btn')) {
+        const row = e.target.closest('.element-row');
+        const pinId = row.querySelector('.pin-id').textContent;
+        const element = elements.find(el => el.id === pinId);
+        
+        element.mode = (element.mode + 1) % element.modes.length;
+        row.querySelector('.mode-btn').textContent = element.modes[element.mode];
+        updateControls(row, element);
+    }
+});
+
+function updateControls(row, element) {
+    const controls = row.querySelector('.controls');
+    controls.innerHTML = '';
+    
+    switch(element.modes[element.mode]) {
+        case '🌓':
+            controls.innerHTML = '<input type="range" min="0" max="255">';
+            break;
+        case '📊':
+            controls.innerHTML = '<progress value="0" max="1024"></progress>';
+            break;
+        case '🔌':
+            controls.innerHTML = '<label class="switch"><input type="checkbox"><div class="slider"></div></label>';
+            break;
+    }
+}
+
+document.addEventListener('input', (e) => {
+    if(e.target.matches('input[type="range"], input[type="checkbox"]')) {
+        const row = e.target.closest('.element-row');
+        const status = row.querySelector('.status-led');
+        status.classList.toggle('active', 
+            e.target.type === 'range' ? e.target.value > 0 :
+            e.target.checked
+        );
+    }
+});
+</script>
+</body>
+</html>
