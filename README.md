@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Quink 🚀
 
 **تحكم فوري واستعلام شامل لمتحكمات الأردوينو!**
@@ -44,3 +45,7 @@ Quink هو مشروع مبتكر يسهل عملية التحكم والاستع
 **🚧 قريبًا:** سيتم توفير **وثائق تفصيلية**، إلى جانب **مكتبات وأمثلة توضيحية** لتسهيل دمج Qoink في مشاريعك الخاصة! 🎯
 
 📢 **Quink - تحكم أسرع، استعلام شامل!**
+=======
+# QUINK
+Quink is an innovative project designed for seamless and high-speed control and monitoring of Arduino microcontrollers. It provides real-time pin status updates and allows for direct control using simple serial commands.
+>>>>>>> 923b998be97c3cb29333e2aa4b43618ade85dcda
